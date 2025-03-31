@@ -11,7 +11,7 @@ app.use(express.static('public')); // Serve static files from the public folder
 
 const HL_PRIVATE_TOKEN = process.env.HL_PRIVATE_TOKEN;
 const HL_API_URL = 'https://rest.gohighlevel.com/v2';
-const TEAMUP_API_URL = 'https://goteamup.com/api/business/v1';
+const TEAMUP_API_URL = 'https://goteamup.com/v1'; // Updated to remove /api/business prefix
 const TEAMUP_AUTH_URL = 'https://goteamup.com/api/auth/authorize';
 const TEAMUP_TOKEN_URL = 'https://goteamup.com/api/auth/access_token';
 const TEAMUP_CLIENT_ID = process.env.TEAMUP_CLIENT_ID;
@@ -174,12 +174,12 @@ app.post('/add-teamup-membership', async (req, res) => {
 
     console.log('TeamUp Customer Response:', customerResponse.data);
 
-    const customers = customerResponse.data.results; // Access the 'results' array
+    const customers = customerResponse.data.results;
     if (!customers || customers.length === 0) {
       return res.status(404).json({ error: 'Customer not found in TeamUp' });
     }
 
-    const customerId = customers[0].id; // Now correctly accessing the id
+    const customerId = customers[0].id;
 
     // Step 2: Create the customer membership
     const membershipResponse = await axios.post(`${TEAMUP_API_URL}/customer-memberships`, {
