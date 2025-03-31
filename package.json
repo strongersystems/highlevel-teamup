@@ -1,0 +1,14 @@
+{
+  "name": "teamup-gym-manager",
+  "version": "1.0.0",
+  "description": "HighLevel app to manage TeamUp accounts for gym owners",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}
