@@ -1,6 +1,6 @@
 const express = require('express');
 const axios = require('axios');
-require('dotenv').config();
+require('dotenv').process();
 
 const app = express();
 app.use(express.json());
@@ -21,7 +21,6 @@ const states = {};
 
 // Route to initiate TeamUp OAuth flow
 app.get('/teamup/auth', (req, res) => {
-  // Generate a random state for CSRF protection
   const state = Math.random().toString(36).substring(2);
   states['user'] = state; // Replace 'user' with a user identifier in production
 
@@ -37,13 +36,12 @@ app.get('/teamup/callback', async (req, res) => {
   console.log('TeamUp Authorization Code:', code);
   console.log('TeamUp State:', state);
 
-  // Verify the state to prevent CSRF attacks
-  const expectedState = states['user']; // Replace 'user' with a user identifier in production
+  const expectedState = states['user'];
   if (!state || state !== expectedState) {
     console.error('Invalid state parameter in TeamUp callback');
     return res.status(400).send('Authorization failed: Invalid state parameter');
   }
-  delete states['user']; // Clean up the state
+  delete states['user'];
 
   if (!code) {
     console.error('No authorization code provided in TeamUp callback');
@@ -51,7 +49,6 @@ app.get('/teamup/callback', async (req, res) => {
   }
 
   try {
-    // Prepare the form data for the token request
     const formData = new URLSearchParams();
     formData.append('grant_type', 'authorization_code');
     formData.append('client_id', TEAMUP_CLIENT_ID);
@@ -66,8 +63,7 @@ app.get('/teamup/callback', async (req, res) => {
     const accessToken = response.data.access_token;
     console.log('TeamUp Access Token:', accessToken);
 
-    // Store the access token (in memory for demo; use a database in production)
-    accessTokens['user'] = accessToken; // Replace 'user' with a user identifier in production
+    accessTokens['user'] = accessToken;
 
     res.send('TeamUp authorization successful! You can now sync customers.');
   } catch (error) {
@@ -76,41 +72,74 @@ app.get('/teamup/callback', async (req, res) => {
   }
 });
 
-// Endpoint to sync TeamUp customers to HighLevel
-app.post('/sync-customers', async (req, res) => {
-  const { userId } = req.body; // Replace with actual user identifier in production
-  const teamUpAccessToken = accessTokens[userId || 'user'];
+// Endpoint to create a customer in TeamUp (called by HighLevel workflow)
+app.post('/create-teamup-customer', async (req, res) => {
+  const { firstName, lastName, email, userId } = req.body;
 
+  if (!firstName || !lastName || !email || !userId) {
+    return res.status(400).json({ error: 'Missing required fields: firstName, lastName, email, or userId' });
+  }
+
+  const teamUpAccessToken = accessTokens[userId];
   if (!teamUpAccessToken) {
     return res.status(400).json({ error: 'Missing TeamUp access token. Please authorize TeamUp first.' });
   }
 
   try {
-    // Fetch customers from TeamUp
-    const teamUpResponse = await axios.get(`${TEAMUP_API_URL}/customers`, {
-      headers: { Authorization: `Bearer ${teamUpAccessToken}` },
+    const response = await axios.post(`${TEAMUP_API_URL}/customers`, {
+      first_name: firstName,
+      last_name: lastName,
+      email: email
+    }, {
+      headers: {
+        Authorization: `Bearer ${teamUpAccessToken}`,
+        'Content-Type': 'application/json'
+      }
     });
-    const customers = teamUpResponse.data.customers;
 
-    // Sync to HighLevel
-    for (const customer of customers) {
-      const hlContact = {
-        firstName: customer.first_name,
-        lastName: customer.last_name,
-        email: customer.email,
-        phone: customer.phone || '',
-      };
+    console.log(`Created TeamUp customer: ${firstName} ${lastName} (${email})`);
+    res.json({ message: 'Customer created in TeamUp successfully', customer: response.data });
+  } catch (error) {
+    console.error('Error creating TeamUp customer:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to create customer in TeamUp: ' + (error.response?.data?.error || error.message) });
+  }
+});
 
-      await axios.post(`${HL_API_URL}/contacts`, hlContact, {
-        headers: { Authorization: `Bearer ${HL_PRIVATE_TOKEN}` },
-      });
-      console.log(`Synced ${customer.first_name} to HighLevel`);
+// Endpoint to add a membership in HighLevel (called by HighLevel workflow)
+app.post('/add-highlevel-membership', async (req, res) => {
+  const { email, membershipOfferId } = req.body;
+
+  if (!email || !membershipOfferId) {
+    return res.status(400).json({ error: 'Missing required fields: email or membershipOfferId' });
+  }
+
+  try {
+    // Step 1: Find the contact by email
+    const contactResponse = await axios.get(`${HL_API_URL}/contacts?email=${encodeURIComponent(email)}`, {
+      headers: { Authorization: `Bearer ${HL_PRIVATE_TOKEN}` }
+    });
+
+    const contacts = contactResponse.data.contacts;
+    if (!contacts || contacts.length === 0) {
+      return res.status(404).json({ error: 'Contact not found in HighLevel' });
     }
 
-    res.json({ message: 'Customers synced successfully!' });
+    const contactId = contacts[0].id;
+
+    // Step 2: Grant membership access (using /users/invite to add the contact as a member)
+    const inviteResponse = await axios.post(`${HL_API_URL}/users/invite`, {
+      email: email,
+      offer_id: membershipOfferId,
+      role: 'member'
+    }, {
+      headers: { Authorization: `Bearer ${HL_PRIVATE_TOKEN}` }
+    });
+
+    console.log(`Added membership ${membershipOfferId} to contact ${email} (ID: ${contactId}) in HighLevel`);
+    res.json({ message: 'Membership added successfully in HighLevel', invite: inviteResponse.data });
   } catch (error) {
-    console.error('Error syncing customers:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Failed to sync customers: ' + (error.response?.data?.error || error.message) });
+    console.error('Error adding HighLevel membership:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to add membership in HighLevel: ' + (error.response?.data?.error || error.message) });
   }
 });
 
@@ -121,7 +150,6 @@ app.post('/teamup/webhook', async (req, res) => {
   try {
     const event = req.body;
 
-    // Check the event type (e.g., customer.created)
     if (event.event === 'customer.created') {
       const customer = event.data;
       const hlContact = {
@@ -131,14 +159,12 @@ app.post('/teamup/webhook', async (req, res) => {
         phone: customer.phone || '',
       };
 
-      // Sync the new customer to HighLevel
       await axios.post(`${HL_API_URL}/contacts`, hlContact, {
-        headers: { Authorization: `Bearer ${HL_PRIVATE_TOKEN}` },
+        headers: { Authorization: `Bearer ${HL_PRIVATE_TOKEN}` }
       });
       console.log(`Synced new customer ${customer.first_name} to HighLevel via webhook`);
     }
 
-    // Respond to TeamUp to acknowledge receipt of the webhook
     res.status(200).json({ message: 'Webhook received successfully' });
   } catch (error) {
     console.error('Error processing TeamUp webhook:', error.response?.data || error.message);
