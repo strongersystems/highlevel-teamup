@@ -11,7 +11,7 @@ app.use(express.static('public')); // Serve static files from the public folder
 
 const HL_PRIVATE_TOKEN = process.env.HL_PRIVATE_TOKEN;
 const HL_API_URL = 'https://rest.gohighlevel.com/v2';
-const TEAMUP_API_URL = 'https://goteamup.com/v1'; // Updated to remove /api/business prefix
+const TEAMUP_API_URL = 'https://api.goteamup.com/v1'; // Reverted to the correct base URL
 const TEAMUP_AUTH_URL = 'https://goteamup.com/api/auth/authorize';
 const TEAMUP_TOKEN_URL = 'https://goteamup.com/api/auth/access_token';
 const TEAMUP_CLIENT_ID = process.env.TEAMUP_CLIENT_ID;
@@ -43,7 +43,7 @@ const states = {};
 // Debug route to test DNS resolution
 app.get('/debug/dns', async (req, res) => {
   try {
-    const addresses = await dns.lookup('goteamup.com');
+    const addresses = await dns.lookup('api.goteamup.com'); // Test the correct domain
     res.json({ message: 'DNS resolution successful', addresses });
   } catch (error) {
     res.status(500).json({ error: 'DNS resolution failed', details: error.message });
