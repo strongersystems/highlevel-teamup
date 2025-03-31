@@ -11,13 +11,14 @@ app.use(express.static('public')); // Serve static files from the public folder
 
 const HL_PRIVATE_TOKEN = process.env.HL_PRIVATE_TOKEN;
 const HL_API_URL = 'https://rest.gohighlevel.com/v2';
-const TEAMUP_API_URL = 'https://goteamup.com/api/business/v1'; // Using the updated URL
+const TEAMUP_API_URL = 'https://goteamup.com/api/business/v1';
 const TEAMUP_AUTH_URL = 'https://goteamup.com/api/auth/authorize';
 const TEAMUP_TOKEN_URL = 'https://goteamup.com/api/auth/access_token';
 const TEAMUP_CLIENT_ID = process.env.TEAMUP_CLIENT_ID;
 const TEAMUP_CLIENT_SECRET = process.env.TEAMUP_CLIENT_SECRET;
 const TEAMUP_REDIRECT_URI = 'https://stronger-teamup.onrender.com/teamup/callback';
-const TEAMUP_BUSINESS_ID = process.env.TEAMUP_BUSINESS_ID; // Added Business ID from environment variable
+const TEAMUP_BUSINESS_ID = process.env.TEAMUP_BUSINESS_ID;
+const TEAMUP_MEMBERSHIP_ID = process.env.TEAMUP_MEMBERSHIP_ID; // Added Membership ID from environment variable
 
 // Configure axios-retry
 axiosRetry(axios, {
@@ -42,7 +43,7 @@ const states = {};
 // Debug route to test DNS resolution
 app.get('/debug/dns', async (req, res) => {
   try {
-    const addresses = await dns.lookup('goteamup.com'); // Test the new domain
+    const addresses = await dns.lookup('goteamup.com');
     res.json({ message: 'DNS resolution successful', addresses });
   } catch (error) {
     res.status(500).json({ error: 'DNS resolution failed', details: error.message });
@@ -129,7 +130,7 @@ app.post('/create-teamup-customer', async (req, res) => {
       headers: {
         Authorization: `Bearer ${teamUpAccessToken}`,
         'Content-Type': 'application/json',
-        'Business-ID': TEAMUP_BUSINESS_ID // Added Business-ID header
+        'Business-ID': TEAMUP_BUSINESS_ID
       }
     });
 
@@ -141,41 +142,63 @@ app.post('/create-teamup-customer', async (req, res) => {
   }
 });
 
-// Endpoint to add a membership in HighLevel (called by HighLevel workflow)
-app.post('/add-highlevel-membership', async (req, res) => {
-  const { email, membershipOfferId } = req.body;
+// Endpoint to add a customer membership in TeamUp (called by HighLevel workflow)
+app.post('/add-teamup-membership', async (req, res) => {
+  const { email, userId } = req.body;
 
-  if (!email || !membershipOfferId) {
-    return res.status(400).json({ error: 'Missing required fields: email or membershipOfferId' });
+  if (!email || !userId) {
+    return res.status(400).json({ error: 'Missing required fields: email or userId' });
+  }
+
+  const teamUpAccessToken = await storage.getItem(`teamup_access_token_${userId}`);
+  if (!teamUpAccessToken) {
+    return res.status(400).json({ error: 'Missing TeamUp access token. Please authorize TeamUp first.' });
+  }
+
+  if (!TEAMUP_BUSINESS_ID) {
+    return res.status(400).json({ error: 'Missing TeamUp Business ID. Please set TEAMUP_BUSINESS_ID environment variable.' });
+  }
+
+  if (!TEAMUP_MEMBERSHIP_ID) {
+    return res.status(400).json({ error: 'Missing TeamUp Membership ID. Please set TEAMUP_MEMBERSHIP_ID environment variable.' });
   }
 
   try {
-    // Step 1: Find the contact by email
-    const contactResponse = await axios.get(`${HL_API_URL}/contacts?email=${encodeURIComponent(email)}`, {
-      headers: { Authorization: `Bearer ${HL_PRIVATE_TOKEN}` }
+    // Step 1: Find the customer by email to get the customer_id
+    const customerResponse = await axios.get(`${TEAMUP_API_URL}/customers?email=${encodeURIComponent(email)}`, {
+      headers: {
+        Authorization: `Bearer ${teamUpAccessToken}`,
+        'Business-ID': TEAMUP_BUSINESS_ID
+      }
     });
 
-    const contacts = contactResponse.data.contacts;
-    if (!contacts || contacts.length === 0) {
-      return res.status(404).json({ error: 'Contact not found in HighLevel' });
+    console.log('TeamUp Customer Response:', customerResponse.data);
+
+    const customers = customerResponse.data;
+    if (!customers || customers.length === 0) {
+      return res.status(404).json({ error: 'Customer not found in TeamUp' });
     }
 
-    const contactId = contacts[0].id;
+    const customerId = customers[0].id;
 
-    // Step 2: Grant membership access (using /users/invite to add the contact as a member)
-    const inviteResponse = await axios.post(`${HL_API_URL}/users/invite`, {
-      email: email,
-      offer_id: membershipOfferId,
-      role: 'member'
+    // Step 2: Create the customer membership
+    const membershipResponse = await axios.post(`${TEAMUP_API_URL}/customer-memberships`, {
+      customer_id: customerId,
+      membership_id: TEAMUP_MEMBERSHIP_ID,
+      start_date: new Date().toISOString().split('T')[0] // Use today's date in YYYY-MM-DD format
     }, {
-      headers: { Authorization: `Bearer ${HL_PRIVATE_TOKEN}` }
+      headers: {
+        Authorization: `Bearer ${teamUpAccessToken}`,
+        'Content-Type': 'application/json',
+        'Business-ID': TEAMUP_BUSINESS_ID
+      }
     });
 
-    console.log(`Added membership ${membershipOfferId} to contact ${email} (ID: ${contactId}) in HighLevel`);
-    res.json({ message: 'Membership added successfully in HighLevel', invite: inviteResponse.data });
+    console.log(`Added TeamUp customer membership for ${email} (Customer ID: ${customerId})`);
+    res.json({ message: 'Customer membership added in TeamUp successfully', membership: membershipResponse.data });
   } catch (error) {
-    console.error('Error adding HighLevel membership:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Failed to add membership in HighLevel: ' + (error.response?.data?.error || error.message) });
+    console.error('Error adding TeamUp customer membership:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to add customer membership in TeamUp: ' + (error.response?.data?.error || error.message) });
   }
 });
 
