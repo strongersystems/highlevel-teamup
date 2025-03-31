@@ -97,6 +97,38 @@ app.post('/sync-customers', async (req, res) => {
   }
 });
 
+// Webhook endpoint to receive TeamUp events
+app.post('/teamup/webhook', async (req, res) => {
+  console.log('Received TeamUp webhook:', req.body);
+
+  try {
+    const event = req.body;
+
+    // Check the event type (e.g., customer.created)
+    if (event.event === 'customer.created') {
+      const customer = event.data;
+      const hlContact = {
+        firstName: customer.first_name,
+        lastName: customer.last_name,
+        email: customer.email,
+        phone: customer.phone || '',
+      };
+
+      // Sync the new customer to HighLevel
+      await axios.post(`${HL_API_URL}/contacts`, hlContact, {
+        headers: { Authorization: `Bearer ${HL_PRIVATE_TOKEN}` },
+      });
+      console.log(`Synced new customer ${customer.first_name} to HighLevel via webhook`);
+    }
+
+    // Respond to TeamUp to acknowledge receipt of the webhook
+    res.status(200).json({ message: 'Webhook received successfully' });
+  } catch (error) {
+    console.error('Error processing TeamUp webhook:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to process webhook' });
+  }
+});
+
 app.get('/', (req, res) => {
   res.send('TeamUp Gym Manager is running!');
 });
