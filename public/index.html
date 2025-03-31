@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TeamUp Gym Manager</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 50px;
+      background-color: #f4f4f4;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      color: #333;
+    }
+    p {
+      color: #666;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 10px;
+      font-size: 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    button:hover:not(:disabled) {
+      background-color: #45a049;
+    }
+    #message {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>TeamUp Gym Manager</h1>
+    <p>Authorize your TeamUp account to sync customers to HighLevel.</p>
+    <button onclick="authorizeTeamUp()">Authorize TeamUp</button>
+    <br />
+    <button onclick="syncCustomers()" id="syncButton" disabled>Sync Customers</button>
+    <div id="message"></div>
+  </div>
+
+  <script>
+    // Check if the URL contains a TeamUp callback (after authorization)
+    if (window.location.pathname === '/teamup/callback') {
+      document.getElementById('message').innerText = 'TeamUp authorized! You can now sync customers.';
+      document.getElementById('message').style.color = 'green';
+      document.getElementById('syncButton').disabled = false;
+      // Redirect to the main page without the callback path
+      window.history.replaceState({}, document.title, '/');
+    }
+
+    function authorizeTeamUp() {
+      window.location.href = '/teamup/auth';
+    }
+
+    async function syncCustomers() {
+      const messageDiv = document.getElementById('message');
+
+      messageDiv.innerText = 'Syncing customers...';
+      messageDiv.style.color = 'blue';
+
+      try {
+        const response = await fetch('/sync-customers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: 'user' }), // Replace with actual user identifier in production
+        });
+        const result = await response.json();
+
+        if (response.ok) {
+          messageDiv.innerText = result.message;
+          messageDiv.style.color = 'green';
+        } else {
+          messageDiv.innerText = result.error || 'Failed to sync customers.';
+          messageDiv.style.color = 'red';
+        }
+      } catch (error) {
+        messageDiv.innerText = 'Error: ' + error.message;
+        messageDiv.style.color = 'red';
+      }
+    }
+  </script>
+</body>
+</html>
