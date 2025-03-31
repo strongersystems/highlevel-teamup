@@ -166,6 +166,7 @@ app.post('/add-teamup-membership', async (req, res) => {
 
   try {
     // Step 1: Find the customer by email to get the customer_id, limit to 1 result
+    console.log(`Attempting to retrieve customer with email: ${email}`);
     const customerResponse = await axios.get(`${TEAMUP_API_URL}/customers?email=${encodeURIComponent(email)}&limit=1`, {
       headers: {
         Authorization: `Bearer ${teamUpAccessToken}`,
@@ -176,12 +177,23 @@ app.post('/add-teamup-membership', async (req, res) => {
 
     console.log('TeamUp Customer Response:', customerResponse.data);
 
+    // Check if the response has the expected structure
+    if (!customerResponse.data || !customerResponse.data.results || !Array.isArray(customerResponse.data.results)) {
+      throw new Error('Unexpected API response structure: results array not found');
+    }
+
     const customers = customerResponse.data.results;
-    if (!customers || customers.length === 0) {
+    if (customers.length === 0) {
       return res.status(404).json({ error: 'Customer not found in TeamUp' });
     }
 
-    const customerId = customers[0].id;
+    // Ensure the customer object has an 'id' property
+    const customer = customers[0];
+    if (!customer || !customer.id) {
+      throw new Error('Customer object missing id property');
+    }
+
+    const customerId = customer.id;
 
     // Step 2: Log the customer ID and membership ID, pending confirmation of the correct endpoint
     console.log(`Pending TeamUp customer membership assignment for ${email} (Customer ID: ${customerId}, Membership ID: ${TEAMUP_MEMBERSHIP_ID})`);
@@ -191,7 +203,14 @@ app.post('/add-teamup-membership', async (req, res) => {
       membershipId: TEAMUP_MEMBERSHIP_ID
     });
   } catch (error) {
-    console.error('Error in add-teamup-membership:', error.response?.data || error.message);
+    console.error('Error in add-teamup-membership:', {
+      message: error.message,
+      response: error.response ? {
+        status: error.response.status,
+        data: error.response.data
+      } : null,
+      stack: error.stack
+    });
     res.status(500).json({ error: 'Failed to process customer membership in TeamUp: ' + (error.response?.data?.error || error.message) });
   }
 });
