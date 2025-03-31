@@ -13,11 +13,16 @@ const HL_TOKEN_URL = 'https://rest.gohighlevel.com/v2/oauth/token';
 
 app.get('/auth', (req, res) => {
   const authUrl = `${HL_AUTH_URL}?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=contacts%20workflows`;
+  console.log('Redirecting to HighLevel Auth URL:', authUrl); // Log the auth URL
   res.redirect(authUrl);
 });
 
 app.get('/oauth/callback', async (req, res) => {
   const code = req.query.code;
+  console.log('Authorization Code:', code); // Log the code
+  console.log('Client ID:', CLIENT_ID); // Log the client_id
+  console.log('Client Secret:', CLIENT_SECRET); // Log the client_secret
+  console.log('Redirect URI:', REDIRECT_URI); // Log the redirect_uri
   try {
     const response = await axios.post(HL_TOKEN_URL, {
       grant_type: 'authorization_code',
