@@ -1,6 +1,6 @@
 const express = require('express');
 const axios = require('axios');
-const axiosRetry = require('axios-retry');
+const axiosRetry = require('axios-retry').default; // Use default import
 const dns = require('dns').promises;
 const storage = require('node-persist');
 require('dotenv').config();
