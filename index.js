@@ -183,25 +183,16 @@ app.post('/add-teamup-membership', async (req, res) => {
 
     const customerId = customers[0].id;
 
-    // Step 2: Create the customer membership (try v2 equivalent of POST /v1/customer-memberships)
-    const membershipResponse = await axios.post(`${TEAMUP_API_URL}/customer-memberships`, {
-      customer_id: customerId,
-      membership_id: TEAMUP_MEMBERSHIP_ID,
-      start_date: new Date().toISOString().split('T')[0] // Use today's date in YYYY-MM-DD format
-    }, {
-      headers: {
-        Authorization: `Bearer ${teamUpAccessToken}`,
-        'Content-Type': 'application/json',
-        'Teamup-Provider-ID': TEAMUP_BUSINESS_ID,
-        'Teamup-Request-Mode': 'provider'
-      }
+    // Step 2: Log the customer ID and membership ID, pending confirmation of the correct endpoint
+    console.log(`Pending TeamUp customer membership assignment for ${email} (Customer ID: ${customerId}, Membership ID: ${TEAMUP_MEMBERSHIP_ID})`);
+    res.json({ 
+      message: 'Customer membership assignment pending. Awaiting confirmation of the correct v2 endpoint from TeamUp support.',
+      customerId: customerId,
+      membershipId: TEAMUP_MEMBERSHIP_ID
     });
-
-    console.log(`Added TeamUp customer membership for ${email} (Customer ID: ${customerId})`);
-    res.json({ message: 'Customer membership added in TeamUp successfully', membership: membershipResponse.data });
   } catch (error) {
-    console.error('Error adding TeamUp customer membership:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Failed to add customer membership in TeamUp: ' + (error.response?.data?.error || error.message) });
+    console.error('Error in add-teamup-membership:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to process customer membership in TeamUp: ' + (error.response?.data?.error || error.message) });
   }
 });
 
