@@ -4,24 +4,74 @@ require('dotenv').config();
 
 const app = express();
 app.use(express.json());
+app.use(express.static('public')); // Serve static files from the public folder
 
-// HighLevel Private Integration token (from your sub-account)
 const HL_PRIVATE_TOKEN = process.env.HL_PRIVATE_TOKEN;
 const HL_API_URL = 'https://rest.gohighlevel.com/v2';
 const TEAMUP_API_URL = 'https://api.goteamup.com/v1';
+const TEAMUP_AUTH_URL = 'https://custom-app-console.goteamup.com/authorize';
+const TEAMUP_TOKEN_URL = 'https://custom-app-console.goteamup.com/token';
+const TEAMUP_CLIENT_ID = process.env.TEAMUP_CLIENT_ID;
+const TEAMUP_CLIENT_SECRET = process.env.TEAMUP_CLIENT_SECRET;
+const TEAMUP_REDIRECT_URI = 'https://stronger-teamup.onrender.com/teamup/callback';
+
+// Store access tokens in memory (for demo purposes; use a database in production)
+const accessTokens = {};
+
+// Route to initiate TeamUp OAuth flow
+app.get('/teamup/auth', (req, res) => {
+  const authUrl = `${TEAMUP_AUTH_URL}?response_type=code&client_id=${TEAMUP_CLIENT_ID}&redirect_uri=${TEAMUP_REDIRECT_URI}&scope=read_write`;
+  console.log('Redirecting to TeamUp Auth URL:', authUrl);
+  res.redirect(authUrl);
+});
+
+// Route to handle TeamUp OAuth callback
+app.get('/teamup/callback', async (req, res) => {
+  const code = req.query.code;
+  console.log('TeamUp Authorization Code:', code);
+
+  if (!code) {
+    console.error('No authorization code provided in TeamUp callback');
+    return res.status(400).send('Authorization failed: No code provided');
+  }
+
+  try {
+    const response = await axios.post(TEAMUP_TOKEN_URL, {
+      grant_type: 'authorization_code',
+      client_id: TEAMUP_CLIENT_ID,
+      client_secret: TEAMUP_CLIENT_SECRET,
+      redirect_uri: TEAMUP_REDIRECT_URI,
+      code: code,
+    }, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    const accessToken = response.data.access_token;
+    console.log('TeamUp Access Token:', accessToken);
+
+    // Store the access token (in memory for demo; use a database in production)
+    accessTokens['user'] = accessToken; // Replace 'user' with a user identifier in production
+
+    res.send('TeamUp authorization successful! You can now sync customers.');
+  } catch (error) {
+    console.error('Error exchanging code for TeamUp token:', error.response?.data || error.message);
+    res.status(500).send('TeamUp authorization failed: ' + (error.response?.data?.error || error.message));
+  }
+});
 
 // Endpoint to sync TeamUp customers to HighLevel
 app.post('/sync-customers', async (req, res) => {
-  const { teamUpApiKey } = req.body;
+  const { userId } = req.body; // Replace with actual user identifier in production
+  const teamUpAccessToken = accessTokens[userId || 'user'];
 
-  if (!teamUpApiKey) {
-    return res.status(400).json({ error: 'Missing TeamUp API key' });
+  if (!teamUpAccessToken) {
+    return res.status(400).json({ error: 'Missing TeamUp access token. Please authorize TeamUp first.' });
   }
 
   try {
     // Fetch customers from TeamUp
     const teamUpResponse = await axios.get(`${TEAMUP_API_URL}/customers`, {
-      headers: { Authorization: `Bearer ${teamUpApiKey}` },
+      headers: { Authorization: `Bearer ${teamUpAccessToken}` },
     });
     const customers = teamUpResponse.data.customers;
 
