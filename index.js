@@ -1,6 +1,9 @@
 const express = require('express');
 const axios = require('axios');
-require('dotenv').config(); // Corrected from .process() to .config()
+const axiosRetry = require('axios-retry');
+const dns = require('dns').promises;
+const storage = require('node-persist');
+require('dotenv').config();
 
 const app = express();
 app.use(express.json());
@@ -8,16 +11,42 @@ app.use(express.static('public')); // Serve static files from the public folder
 
 const HL_PRIVATE_TOKEN = process.env.HL_PRIVATE_TOKEN;
 const HL_API_URL = 'https://rest.gohighlevel.com/v2';
-const TEAMUP_API_URL = 'https://api.goteamup.com/v1';
+const TEAMUP_API_URL = 'https://goteamup.com/api/business/v1'; // Updated to new URL
 const TEAMUP_AUTH_URL = 'https://goteamup.com/api/auth/authorize';
 const TEAMUP_TOKEN_URL = 'https://goteamup.com/api/auth/access_token';
 const TEAMUP_CLIENT_ID = process.env.TEAMUP_CLIENT_ID;
 const TEAMUP_CLIENT_SECRET = process.env.TEAMUP_CLIENT_SECRET;
 const TEAMUP_REDIRECT_URI = 'https://stronger-teamup.onrender.com/teamup/callback';
 
-// Store access tokens and states in memory (for demo purposes; use a database in production)
-const accessTokens = {};
+// Configure axios-retry
+axiosRetry(axios, {
+  retries: 3, // Retry 3 times
+  retryDelay: (retryCount) => {
+    return retryCount * 1000; // Exponential backoff: 1s, 2s, 3s
+  },
+  retryCondition: (error) => {
+    // Retry on network errors (e.g., ENOTFOUND) or 5xx status codes
+    return axiosRetry.isNetworkOrIdempotentRequestError(error) || (error.response && error.response.status >= 500);
+  }
+});
+
+// Initialize node-persist storage
+(async () => {
+  await storage.init({ dir: 'storage' }); // Store data in a 'storage' directory
+})();
+
+// Store states in memory (for demo purposes; use a database in production)
 const states = {};
+
+// Debug route to test DNS resolution
+app.get('/debug/dns', async (req, res) => {
+  try {
+    const addresses = await dns.lookup('goteamup.com'); // Test the new domain
+    res.json({ message: 'DNS resolution successful', addresses });
+  } catch (error) {
+    res.status(500).json({ error: 'DNS resolution failed', details: error.message });
+  }
+});
 
 // Route to initiate TeamUp OAuth flow
 app.get('/teamup/auth', (req, res) => {
@@ -63,9 +92,10 @@ app.get('/teamup/callback', async (req, res) => {
     const accessToken = response.data.access_token;
     console.log('TeamUp Access Token:', accessToken);
 
-    accessTokens['user'] = accessToken;
+    // Store the access token persistently
+    await storage.setItem('teamup_access_token_user', accessToken); // Replace 'user' with a user identifier in production
 
-    res.send('TeamUp authorization successful! You can now sync customers.');
+    res.send('TeamUp authorization successful! You can now proceed with the workflow.');
   } catch (error) {
     console.error('Error exchanging code for TeamUp token:', error.response?.data || error.message);
     res.status(500).send('TeamUp authorization failed: ' + (error.response?.data?.error || error.message));
@@ -80,7 +110,7 @@ app.post('/create-teamup-customer', async (req, res) => {
     return res.status(400).json({ error: 'Missing required fields: firstName, lastName, email, or userId' });
   }
 
-  const teamUpAccessToken = accessTokens[userId];
+  const teamUpAccessToken = await storage.getItem(`teamup_access_token_${userId}`);
   if (!teamUpAccessToken) {
     return res.status(400).json({ error: 'Missing TeamUp access token. Please authorize TeamUp first.' });
   }
