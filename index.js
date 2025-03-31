@@ -11,7 +11,7 @@ app.use(express.static('public')); // Serve static files from the public folder
 
 const HL_PRIVATE_TOKEN = process.env.HL_PRIVATE_TOKEN;
 const HL_API_URL = 'https://rest.gohighlevel.com/v2';
-const TEAMUP_API_URL = 'https://api.goteamup.com/v1'; // Reverted to the correct base URL
+const TEAMUP_API_URL = 'https://goteamup.com/api/v2'; // Updated to v2 base URL
 const TEAMUP_AUTH_URL = 'https://goteamup.com/api/auth/authorize';
 const TEAMUP_TOKEN_URL = 'https://goteamup.com/api/auth/access_token';
 const TEAMUP_CLIENT_ID = process.env.TEAMUP_CLIENT_ID;
@@ -43,7 +43,7 @@ const states = {};
 // Debug route to test DNS resolution
 app.get('/debug/dns', async (req, res) => {
   try {
-    const addresses = await dns.lookup('api.goteamup.com'); // Test the correct domain
+    const addresses = await dns.lookup('goteamup.com'); // Test the v2 domain
     res.json({ message: 'DNS resolution successful', addresses });
   } catch (error) {
     res.status(500).json({ error: 'DNS resolution failed', details: error.message });
@@ -130,7 +130,8 @@ app.post('/create-teamup-customer', async (req, res) => {
       headers: {
         Authorization: `Bearer ${teamUpAccessToken}`,
         'Content-Type': 'application/json',
-        'Business-ID': TEAMUP_BUSINESS_ID
+        'Teamup-Provider-ID': TEAMUP_BUSINESS_ID, // Updated header name for v2
+        'Teamup-Request-Mode': 'provider' // Set to provider mode
       }
     });
 
@@ -168,7 +169,8 @@ app.post('/add-teamup-membership', async (req, res) => {
     const customerResponse = await axios.get(`${TEAMUP_API_URL}/customers?email=${encodeURIComponent(email)}`, {
       headers: {
         Authorization: `Bearer ${teamUpAccessToken}`,
-        'Business-ID': TEAMUP_BUSINESS_ID
+        'Teamup-Provider-ID': TEAMUP_BUSINESS_ID, // Updated header name for v2
+        'Teamup-Request-Mode': 'provider' // Set to provider mode
       }
     });
 
@@ -181,7 +183,7 @@ app.post('/add-teamup-membership', async (req, res) => {
 
     const customerId = customers[0].id;
 
-    // Step 2: Create the customer membership
+    // Step 2: Create the customer membership (try v2 equivalent of POST /v1/customer-memberships)
     const membershipResponse = await axios.post(`${TEAMUP_API_URL}/customer-memberships`, {
       customer_id: customerId,
       membership_id: TEAMUP_MEMBERSHIP_ID,
@@ -190,7 +192,8 @@ app.post('/add-teamup-membership', async (req, res) => {
       headers: {
         Authorization: `Bearer ${teamUpAccessToken}`,
         'Content-Type': 'application/json',
-        'Business-ID': TEAMUP_BUSINESS_ID
+        'Teamup-Provider-ID': TEAMUP_BUSINESS_ID, // Updated header name for v2
+        'Teamup-Request-Mode': 'provider' // Set to provider mode
       }
     });
 
