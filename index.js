@@ -9,18 +9,23 @@ app.use(express.static('public')); // Serve static files from the public folder
 const HL_PRIVATE_TOKEN = process.env.HL_PRIVATE_TOKEN;
 const HL_API_URL = 'https://rest.gohighlevel.com/v2';
 const TEAMUP_API_URL = 'https://api.goteamup.com/v1';
-const TEAMUP_AUTH_URL = 'https://custom-app-console.goteamup.com/authorize';
-const TEAMUP_TOKEN_URL = 'https://custom-app-console.goteamup.com/token';
+const TEAMUP_AUTH_URL = 'https://goteamup.com/api/auth/authorize';
+const TEAMUP_TOKEN_URL = 'https://goteamup.com/api/auth/access_token';
 const TEAMUP_CLIENT_ID = process.env.TEAMUP_CLIENT_ID;
 const TEAMUP_CLIENT_SECRET = process.env.TEAMUP_CLIENT_SECRET;
 const TEAMUP_REDIRECT_URI = 'https://stronger-teamup.onrender.com/teamup/callback';
 
-// Store access tokens in memory (for demo purposes; use a database in production)
+// Store access tokens and states in memory (for demo purposes; use a database in production)
 const accessTokens = {};
+const states = {};
 
 // Route to initiate TeamUp OAuth flow
 app.get('/teamup/auth', (req, res) => {
-  const authUrl = `${TEAMUP_AUTH_URL}?response_type=code&client_id=${TEAMUP_CLIENT_ID}&redirect_uri=${TEAMUP_REDIRECT_URI}&scope=read_write`;
+  // Generate a random state for CSRF protection
+  const state = Math.random().toString(36).substring(2);
+  states['user'] = state; // Replace 'user' with a user identifier in production
+
+  const authUrl = `${TEAMUP_AUTH_URL}?response_type=code&client_id=${TEAMUP_CLIENT_ID}&redirect_uri=${TEAMUP_REDIRECT_URI}&scope=read_write&state=${state}`;
   console.log('Redirecting to TeamUp Auth URL:', authUrl);
   res.redirect(authUrl);
 });
@@ -28,7 +33,17 @@ app.get('/teamup/auth', (req, res) => {
 // Route to handle TeamUp OAuth callback
 app.get('/teamup/callback', async (req, res) => {
   const code = req.query.code;
+  const state = req.query.state;
   console.log('TeamUp Authorization Code:', code);
+  console.log('TeamUp State:', state);
+
+  // Verify the state to prevent CSRF attacks
+  const expectedState = states['user']; // Replace 'user' with a user identifier in production
+  if (!state || state !== expectedState) {
+    console.error('Invalid state parameter in TeamUp callback');
+    return res.status(400).send('Authorization failed: Invalid state parameter');
+  }
+  delete states['user']; // Clean up the state
 
   if (!code) {
     console.error('No authorization code provided in TeamUp callback');
@@ -36,13 +51,15 @@ app.get('/teamup/callback', async (req, res) => {
   }
 
   try {
-    const response = await axios.post(TEAMUP_TOKEN_URL, {
-      grant_type: 'authorization_code',
-      client_id: TEAMUP_CLIENT_ID,
-      client_secret: TEAMUP_CLIENT_SECRET,
-      redirect_uri: TEAMUP_REDIRECT_URI,
-      code: code,
-    }, {
+    // Prepare the form data for the token request
+    const formData = new URLSearchParams();
+    formData.append('grant_type', 'authorization_code');
+    formData.append('client_id', TEAMUP_CLIENT_ID);
+    formData.append('client_secret', TEAMUP_CLIENT_SECRET);
+    formData.append('redirect_uri', TEAMUP_REDIRECT_URI);
+    formData.append('code', code);
+
+    const response = await axios.post(TEAMUP_TOKEN_URL, formData, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
 
