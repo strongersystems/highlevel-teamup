@@ -130,8 +130,8 @@ app.post('/create-teamup-customer', async (req, res) => {
       headers: {
         Authorization: `Bearer ${teamUpAccessToken}`,
         'Content-Type': 'application/json',
-        'Teamup-Provider-ID': TEAMUP_BUSINESS_ID, // Updated header name for v2
-        'Teamup-Request-Mode': 'provider' // Set to provider mode
+        'Teamup-Provider-ID': TEAMUP_BUSINESS_ID,
+        'Teamup-Request-Mode': 'provider'
       }
     });
 
@@ -169,8 +169,8 @@ app.post('/add-teamup-membership', async (req, res) => {
     const customerResponse = await axios.get(`${TEAMUP_API_URL}/customers?email=${encodeURIComponent(email)}`, {
       headers: {
         Authorization: `Bearer ${teamUpAccessToken}`,
-        'Teamup-Provider-ID': TEAMUP_BUSINESS_ID, // Updated header name for v2
-        'Teamup-Request-Mode': 'provider' // Set to provider mode
+        'Teamup-Provider-ID': TEAMUP_BUSINESS_ID,
+        'Teamup-Request-Mode': 'provider'
       }
     });
 
@@ -183,25 +183,28 @@ app.post('/add-teamup-membership', async (req, res) => {
 
     const customerId = customers[0].id;
 
-    // Step 2: Create the customer membership (try v2 equivalent of POST /v1/customer-memberships)
-    const membershipResponse = await axios.post(`${TEAMUP_API_URL}/customer-memberships`, {
-      customer_id: customerId,
-      membership_id: TEAMUP_MEMBERSHIP_ID,
-      start_date: new Date().toISOString().split('T')[0] // Use today's date in YYYY-MM-DD format
+    // Step 2: Initiate the purchase on behalf of the customer
+    const membershipResponse = await axios.post(`${TEAMUP_API_URL}/memberships/${TEAMUP_MEMBERSHIP_ID}/initiate_purchase`, {
+      customer: customerId,
+      return_to: 'https://stronger-teamup.onrender.com/purchase-complete' // Replace with a valid redirect URL
     }, {
       headers: {
         Authorization: `Bearer ${teamUpAccessToken}`,
         'Content-Type': 'application/json',
-        'Teamup-Provider-ID': TEAMUP_BUSINESS_ID, // Updated header name for v2
-        'Teamup-Request-Mode': 'provider' // Set to provider mode
+        'Teamup-Provider-ID': TEAMUP_BUSINESS_ID,
+        'Teamup-Request-Mode': 'provider'
       }
     });
 
-    console.log(`Added TeamUp customer membership for ${email} (Customer ID: ${customerId})`);
-    res.json({ message: 'Customer membership added in TeamUp successfully', membership: membershipResponse.data });
+    console.log(`Initiated TeamUp customer membership purchase for ${email} (Customer ID: ${customerId})`);
+    console.log('Membership Response:', membershipResponse.data);
+
+    // Since this is a £0 membership, TeamUp might complete the purchase automatically
+    // Log the next_url for debugging; in an automated workflow, you might need to follow it programmatically
+    res.json({ message: 'Customer membership purchase initiated in TeamUp', next_url: membershipResponse.data.next_url });
   } catch (error) {
-    console.error('Error adding TeamUp customer membership:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Failed to add customer membership in TeamUp: ' + (error.response?.data?.error || error.message) });
+    console.error('Error initiating TeamUp customer membership purchase:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to initiate customer membership purchase in TeamUp: ' + (error.response?.data?.error || error.message) });
   }
 });
 
