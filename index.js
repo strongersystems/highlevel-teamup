@@ -18,7 +18,7 @@ const TEAMUP_CLIENT_ID = process.env.TEAMUP_CLIENT_ID;
 const TEAMUP_CLIENT_SECRET = process.env.TEAMUP_CLIENT_SECRET;
 const TEAMUP_REDIRECT_URI = 'https://stronger-teamup.onrender.com/teamup/callback';
 const TEAMUP_BUSINESS_ID = process.env.TEAMUP_BUSINESS_ID;
-const TEAMUP_MEMBERSHIP_ID = process.env.TEAMUP_MEMBERSHIP_ID; // Added Membership ID from environment variable
+const TEAMUP_MEMBERSHIP_ID = process.env.TEAMUP_MEMBERSHIP_ID;
 
 // Configure axios-retry
 axiosRetry(axios, {
@@ -174,12 +174,12 @@ app.post('/add-teamup-membership', async (req, res) => {
 
     console.log('TeamUp Customer Response:', customerResponse.data);
 
-    const customers = customerResponse.data;
+    const customers = customerResponse.data.results; // Access the 'results' array
     if (!customers || customers.length === 0) {
       return res.status(404).json({ error: 'Customer not found in TeamUp' });
     }
 
-    const customerId = customers[0].id;
+    const customerId = customers[0].id; // Now correctly accessing the id
 
     // Step 2: Create the customer membership
     const membershipResponse = await axios.post(`${TEAMUP_API_URL}/customer-memberships`, {
