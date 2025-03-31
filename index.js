@@ -1,6 +1,6 @@
 const express = require('express');
 const axios = require('axios');
-require('dotenv').process();
+require('dotenv').config(); // Corrected from .process() to .config()
 
 const app = express();
 app.use(express.json());
