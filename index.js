@@ -1,6 +1,6 @@
 const express = require('express');
 const axios = require('axios');
-const axiosRetry = require('axios-retry').default; // Use default import
+const axiosRetry = require('axios-retry').default;
 const dns = require('dns').promises;
 const storage = require('node-persist');
 require('dotenv').config();
@@ -11,12 +11,13 @@ app.use(express.static('public')); // Serve static files from the public folder
 
 const HL_PRIVATE_TOKEN = process.env.HL_PRIVATE_TOKEN;
 const HL_API_URL = 'https://rest.gohighlevel.com/v2';
-const TEAMUP_API_URL = 'https://goteamup.com/api/business/v1'; // Updated to new URL
+const TEAMUP_API_URL = 'https://goteamup.com/api/business/v1'; // Using the updated URL
 const TEAMUP_AUTH_URL = 'https://goteamup.com/api/auth/authorize';
 const TEAMUP_TOKEN_URL = 'https://goteamup.com/api/auth/access_token';
 const TEAMUP_CLIENT_ID = process.env.TEAMUP_CLIENT_ID;
 const TEAMUP_CLIENT_SECRET = process.env.TEAMUP_CLIENT_SECRET;
 const TEAMUP_REDIRECT_URI = 'https://stronger-teamup.onrender.com/teamup/callback';
+const TEAMUP_BUSINESS_ID = process.env.TEAMUP_BUSINESS_ID; // Added Business ID from environment variable
 
 // Configure axios-retry
 axiosRetry(axios, {
@@ -115,6 +116,10 @@ app.post('/create-teamup-customer', async (req, res) => {
     return res.status(400).json({ error: 'Missing TeamUp access token. Please authorize TeamUp first.' });
   }
 
+  if (!TEAMUP_BUSINESS_ID) {
+    return res.status(400).json({ error: 'Missing TeamUp Business ID. Please set TEAMUP_BUSINESS_ID environment variable.' });
+  }
+
   try {
     const response = await axios.post(`${TEAMUP_API_URL}/customers`, {
       first_name: firstName,
@@ -123,7 +128,8 @@ app.post('/create-teamup-customer', async (req, res) => {
     }, {
       headers: {
         Authorization: `Bearer ${teamUpAccessToken}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Business-ID': TEAMUP_BUSINESS_ID // Added Business-ID header
       }
     });
 
